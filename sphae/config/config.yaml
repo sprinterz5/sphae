@@ -27,6 +27,9 @@ db:
 args:
   db_dir: ""
   output: "sphae.out"
+  # GPU support (sphae-gpu fork): when True, phold runs on GPU (drops --cpu).
+  # Override from the CLI with `sphae run --use-gpu` / `sphae annotate --use-gpu`.
+  use_gpu: True
   vv_db: $VVDB
   checkv_db: $CHECKVDB
   pharokka_db: $PHAROKKADB

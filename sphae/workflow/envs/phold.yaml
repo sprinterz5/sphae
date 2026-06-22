@@ -1,10 +1,17 @@
 name: phold
 channels:
+    - pytorch
+    - nvidia
     - conda-forge
     - bioconda
     - defaults
 dependencies:
     - python==3.9.21
     - pip
-    - phold>=1.1.0
+    # CUDA-enabled PyTorch — must come from pytorch+nvidia channels
+    # before phold is installed so bioconda does not override it with the CPU build.
+    - pytorch>=2.1.0
+    - pytorch-cuda=12.4
     - genbank_to
+    - pip:
+        - phold>=1.1.0

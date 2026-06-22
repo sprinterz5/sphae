@@ -55,6 +55,8 @@ def common_options(func):
         click.option('--temp-dir', help='Temp directory', required=False),
         click.option('--use-conda/--no-use-conda', default=True, help='Use conda for Snakemake rules',
                      show_default=True),
+        click.option('--use-gpu/--no-use-gpu', 'use_gpu', default=False, show_default=True,
+                     help='Run phold on GPU instead of CPU (much faster; needs an NVIDIA GPU + a CUDA-enabled phold env)'),
         click.option('--conda-prefix', default=snake_base(os.path.join('workflow', 'conda')),
                      help='Custom conda env directory', type=click.Path(), show_default=True),
         click.option('--snake-default', multiple=True,
@@ -151,7 +153,7 @@ def install(output, temp_dir, db_dir, configfile, **kwargs):
 @common_options
 @click.option('--genome', 'genome', help='Input genome assembled or downloaded', type=click.Path(), required=False)
 @click.option('--proteins', 'proteins',help='Input predicted proteins (FAA file)',type=click.Path(),required=False)
-def annotate(genome, proteins, output, db_dir, temp_dir, configfile, **kwargs):
+def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, **kwargs):
     if (genome is None and proteins is None) or (genome and proteins):
         raise click.UsageError(
             "Provide exactly one of --genome or --proteins (not both, not neither)."
@@ -163,10 +165,11 @@ def annotate(genome, proteins, output, db_dir, temp_dir, configfile, **kwargs):
         'args': {
             "db_dir": db_dir, 
             "output": output, 
-            "genome": genome, 
+            "genome": genome,
             "proteins": proteins,
             "temp_dir": temp_dir,
-            "configfile": configfile 
+            "configfile": configfile,
+            "use_gpu": use_gpu
         }
     }
 
@@ -181,7 +184,7 @@ def annotate(genome, proteins, output, db_dir, temp_dir, configfile, **kwargs):
 @common_options
 @click.option('--sequencing', 'sequencing', help="sequencing method", default='paired', show_default=True, type=click.Choice(['paired', 'longread']))
 @click.option('--no_medaka', 'no_medaka', help="turns off Medaka polishing for --sequencing longread", is_flag=True, default=False)
-def run(_input, output, sequencing, no_medaka, temp_dir, configfile, **kwargs):
+def run(_input, output, sequencing, no_medaka, temp_dir, configfile, use_gpu, **kwargs):
     """Run sphae"""
     copy_config(configfile, system_config=snake_base(os.path.join('config', 'config.yaml')))
 
@@ -193,6 +196,7 @@ def run(_input, output, sequencing, no_medaka, temp_dir, configfile, **kwargs):
             "no_medaka": no_medaka,
             "configfile": configfile,
             "temp_dir": temp_dir,
+            "use_gpu": use_gpu,
         }
     }
 

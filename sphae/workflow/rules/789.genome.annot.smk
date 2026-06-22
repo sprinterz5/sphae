@@ -77,7 +77,8 @@ rule phold_run_genome:
         predict=os.path.join(dir_annot, "{sample}-predict"),
         o=os.path.join(dir_annot, "{sample}-phold"),
         prefix="{sample}",
-        db = config['args']['phold_db']
+        db = config['args']['phold_db'],
+        cpu = PHOLD_CPU_FLAG
     output:
         gbk=os.path.join(dir_annot, "{sample}-phold","{sample}.gbk"),
         acr=os.path.join(dir_annot, "{sample}-phold","sub_db_tophits", "acr_cds_predictions.tsv"),
@@ -90,13 +91,14 @@ rule phold_run_genome:
         os.path.join(dir_env, "phold.yaml")
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phold.{sample}.log")
     shell:
         """
         if [[ -s {input.gbk} ]] ; then
-            phold predict -i {input.gbk} -o {params.predict} -p {params.prefix} -t {threads} --cpu -d {params.db} -f 2> {log}
+            phold predict -i {input.gbk} -o {params.predict} -p {params.prefix} -t {threads} {params.cpu} -d {params.db} -f 2> {log}
             phold compare -i {input.gbk} --predictions_dir {params.predict} -p {params.prefix} -o {params.o} -t {threads} -d {params.db} -f 2> {log}
         else
             touch {output.gbk}

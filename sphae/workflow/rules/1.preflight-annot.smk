@@ -12,6 +12,15 @@ CONFIG FILE
 configfile: os.path.join(workflow.basedir, "..", "config", "config.yaml")
 
 """
+GPU SUPPORT (sphae-gpu fork)
+phold uses the GPU by default; passing --cpu forces CPU. We therefore inject
+--cpu only when use_gpu is False, keeping CPU as the backward-compatible default.
+"""
+USE_GPU = bool(config['args'].get('use_gpu', False))
+PHOLD_CPU_FLAG = "" if USE_GPU else "--cpu"
+PHOLD_GPU_RESOURCE = 1 if USE_GPU else 0
+
+"""
 DIRECTORIES
 """
 dir = {}

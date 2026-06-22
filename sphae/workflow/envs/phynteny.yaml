@@ -1,9 +1,16 @@
 name: phynteny
 channels:
+    - pytorch
+    - nvidia
     - conda-forge
     - bioconda
     - defaults
 dependencies:
     - python=3.10
     - setuptools<70
-    - phynteny_transformer>=0.1.3
+    # CUDA-enabled PyTorch — must come before phynteny_transformer so bioconda
+    # does not override with a CPU build.
+    - pytorch>=2.1.0
+    - pytorch-cuda=12.4
+    - pip:
+        - phynteny_transformer>=0.1.3

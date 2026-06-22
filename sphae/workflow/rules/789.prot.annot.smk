@@ -64,7 +64,8 @@ rule phold_run_protein:
         predict=os.path.join(dir_annot, "{sample}-predict"),
         o=os.path.join(dir_annot, "{sample}-phold"),
         prefix="{sample}",
-        db = config['args']['phold_db']
+        db = config['args']['phold_db'],
+        cpu = PHOLD_CPU_FLAG
     output:
         out=os.path.join(dir_annot, "{sample}-phold","{sample}_aa.fasta"),
         tsv=os.path.join(dir_annot, "{sample}-phold","{sample}_per_cds_predictions.tsv"),
@@ -78,13 +79,14 @@ rule phold_run_protein:
         os.path.join(dir_env, "phold.yaml")
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phold.{sample}.log")
     shell:
         """
         if [[ -s {input.faa} ]] ; then
-            phold proteins-predict -i {input.faa} -o {params.predict} -p {params.prefix} -t {threads} --cpu -d {params.db} -f 2> {log}
+            phold proteins-predict -i {input.faa} -o {params.predict} -p {params.prefix} -t {threads} {params.cpu} -d {params.db} -f 2> {log}
             phold proteins-compare -i {input.faa} --predictions_dir {params.predict} -p {params.prefix} -o {params.o} -t {threads} -d {params.db} -f 2> {log}
         else
             touch {output.out}

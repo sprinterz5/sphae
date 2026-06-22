@@ -11,6 +11,7 @@ rule phold_run_paired:
         predict=os.path.join(dir_annot, "predict-pr"),
         o=os.path.join(dir_annot, "phold-pr"),
         db = config['args']['phold_db'],
+        cpu = PHOLD_CPU_FLAG,
     output:
         gbk=os.path.join(dir_annot, "phold-pr", "{sample}_1_phold", "{sample}_1.gbk"),
         acr=os.path.join(dir_annot, "phold-pr", "{sample}_1_phold", "sub_db_tophits", "acr_cds_predictions.tsv"),
@@ -23,7 +24,8 @@ rule phold_run_paired:
         os.path.join(dir_env, "phold.yaml")
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phold.{sample}.log")
     shell:
@@ -31,7 +33,7 @@ rule phold_run_paired:
         if [[ -s {input.gbk} ]] ; then
             for f in {params.inputdir}/*; do 
                 data="$(basename "$f" .fasta)"
-                phold predict -i {params.idir}/"$data"_pharokka/"$data".gbk -o {params.predict}/"$data"_predict -p "$data" -t {threads} --cpu -d {params.db} -f 2> {log}
+                phold predict -i {params.idir}/"$data"_pharokka/"$data".gbk -o {params.predict}/"$data"_predict -p "$data" -t {threads} {params.cpu} -d {params.db} -f 2> {log}
                 phold compare -i {params.idir}/"$data"_pharokka/"$data".gbk --predictions_dir {params.predict}/"$data"_predict -p "$data" -o {params.o}/"$data"_phold -t {threads} -d {params.db} -f 2> {log}
             done
         else
@@ -52,6 +54,7 @@ rule phold_run_longreads:
         predict=os.path.join(dir_annot, "predict-sr"),
         o=os.path.join(dir_annot, "phold-sr"),
         db = config['args']['phold_db'],
+        cpu = PHOLD_CPU_FLAG,
     output:
         gbk=os.path.join(dir_annot, "phold-sr", "{sample}_1_phold", "{sample}_1.gbk"),
         acr=os.path.join(dir_annot, "phold-sr", "{sample}_1_phold", "sub_db_tophits", "acr_cds_predictions.tsv"),
@@ -64,7 +67,8 @@ rule phold_run_longreads:
         os.path.join(dir_env, "phold.yaml")
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phold.{sample}.log")
     shell:
@@ -72,7 +76,7 @@ rule phold_run_longreads:
         if [[ -s {input.gbk} ]] ; then
             for f in {params.inputdir}/*; do 
                 data="$(basename "$f" .fasta)"
-                phold predict -i {params.idir}/"$data"_pharokka/"$data".gbk -o {params.predict}/"$data"_predict -p "$data" -t {threads} --cpu -d {params.db} -f 2> {log}
+                phold predict -i {params.idir}/"$data"_pharokka/"$data".gbk -o {params.predict}/"$data"_predict -p "$data" -t {threads} {params.cpu} -d {params.db} -f 2> {log}
                 phold compare -i {params.idir}/"$data"_pharokka/"$data".gbk --predictions_dir {params.predict}/"$data"_predict -p "$data" -o {params.o}/"$data"_phold -t {threads} -d {params.db} -f 2> {log}
             done
         else
