@@ -9,8 +9,9 @@ dependencies:
     - python=3.10
     - setuptools<70
     - requests
-    # PyTorch >= 2.6 required: transformers CVE-2025-32434 check blocks older versions.
-    - pytorch>=2.6.0
+    # Pin to 2.6.x: pytorch-cuda=12.4 not available for 2.7+, conda falls back to CPU build.
+    # 2.6.0 satisfies CVE-2025-32434 (transformers blocks torch.load on <2.6).
+    - pytorch=2.6.0
     - pytorch-cuda=12.4
     - pip:
         - phynteny_transformer>=0.1.3
