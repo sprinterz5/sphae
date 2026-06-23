@@ -7,9 +7,7 @@ dependencies:
     - python==3.9.21
     - pip
     - genbank_to
-    # Install torch via pip from the official PyTorch CUDA wheel index.
-    # Conda channels (pytorch, nvidia) can't reliably force the CUDA build over
-    # conda-forge's CPU-only pytorch — using pip+extra-index-url bypasses this.
+    - foldseek  # binary tool; pip install of phold does not include it
     - pip:
         - --extra-index-url https://download.pytorch.org/whl/cu124
         - torch==2.6.0+cu124
