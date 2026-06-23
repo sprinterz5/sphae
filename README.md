@@ -1,297 +1,240 @@
-[![Edwards Lab](https://img.shields.io/badge/Bioinformatics-EdwardsLab-03A9F4)](https://edwards.flinders.edu.au)
-[![DOI](https://zenodo.org/badge/403889262.svg)](https://zenodo.org/doi/10.5281/zenodo.8365088)
+# sphae — GPU fork
+
+> **This is a GPU-enabled fork of [sphae](https://github.com/linsalrob/sphae).**
+> Upstream sphae always runs phold in CPU mode. This fork adds `--use-gpu` / `--no-use-gpu`
+> flags and installs CUDA-enabled PyTorch so phold runs on your NVIDIA GPU.
+>
+> Tested: RTX 4060 Laptop · driver 610.47 · CUDA 12.x · WSL2 · Windows 11
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/403889262.svg)](https://zenodo.org/doi/10.5281/zenodo.8365088)
 
-![GitHub language count](https://img.shields.io/github/languages/count/linsalrob/spae)
-[![](https://img.shields.io/static/v1?label=CLI&message=Snaketool&color=blueviolet)](https://github.com/beardymcjohnface/Snaketool)
-![GitHub last commit (branch)](https://img.shields.io/github/last-commit/linsalrob/spae/main)
-[![CI](https://github.com/linsalrob/spae/actions/workflows/testing.yml/badge.svg)](https://github.com/linsalrob/spae/actions/workflows/testing.yml)
+---
 
-[![install with pip](https://img.shields.io/static/v1?label=Install%20with&message=PIP&color=success)](https://pypi.org/project/sphae/)
-[![Pip Downloads](https://static.pepy.tech/badge/sphae)](https://www.pepy.tech/projects/sphae)
-[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/sphae/README.html)
-[![Bioconda Downloads](https://img.shields.io/conda/dn/bioconda/sphae)](https://img.shields.io/conda/dn/bioconda/sphae)
-![Docker Pulls](https://img.shields.io/docker/pulls/npbhavya/sphae.svg)
+## What's new in this fork
 
+| Feature | Details |
+|---------|---------|
+| `--use-gpu` / `--no-use-gpu` | Controls whether phold uses GPU. Default: GPU on. |
+| CUDA PyTorch in phold env | `torch==2.6.0+cu124` installed via pip wheel index — conda channels unreliably pick CPU-only builds. |
+| CUDA PyTorch in phynteny env | Same treatment for phynteny_transformer. |
+| `foldseek` as conda dep | pip install of phold omits the foldseek binary; it's now listed explicitly. |
+| `--db_dir` for annotate | `sphae annotate` now accepts `--db_dir` and resolves all database paths automatically. |
+| Version | `1.5.5+gpu` |
 
-# Sphae 
-## Phage toolkit to detect phage candidates for phage therapy
-<p align="center">
-  <img src="logo/sphae.png#gh-light-mode-only" width="300">
-  <img src="logo/sphaedark.png#gh-dark-mode-only" width="300">
-</p>
+**Speed comparison (lambda phage, 88 proteins, RTX 4060 Laptop):**
 
+| Step | CPU | GPU |
+|------|-----|-----|
+| phold predict | ~9 hours | ~3 minutes |
+| Full pipeline | ~9+ hours | ~11 minutes |
 
-**Overview**
+For full technical details see [CHANGES_GPU.md](CHANGES_GPU.md).
+For Windows/WSL2 setup from scratch see [WSL2_SETUP.md](WSL2_SETUP.md).
 
-The steps that sphae takes are shown here:
-<p align="center">
-  <img src="logo/sphae_steps.png#gh-light-mode-only" width="300">
-</p>
+---
 
-This snakemake workflow was built using Snaketool [https://doi.org/10.1371/journal.pcbi.1010705], to assemble and annotate phage sequences. Currently, this tool is being developed for phage genomes. The steps include,
+## Install
 
-- Quality control that removes adaptor sequences, low-quality reads and host contamination (optional). 
-- Assembly
-- Contig quality checks; read coverage, viral or not, completeness, and assembly graph components. 
-- Phage genome annotation
-
-**Cite Sphae: https://doi.org/10.1093/bioadv/vbaf004**
-
-**If you are new to bioinformatics or running command line tools, here is a great tutorial to follow: https://github.com/AnitaTarasenko/sphae/wiki/Sphae-tutorial**
-
-### Install 
-
-**Pip install**
+**Do not** use `pip install sphae` — that installs the upstream PyPI version without GPU support.
 
 ```bash
-#creating a new envrionment
-conda create -y -n sphae python=3.13
-conda activate sphae
-#install sphae 
-pip install sphae
+pip install git+https://github.com/sprinterz5/sphae.git@gpu-support
 ```
 
-**Conda install** 
-
-Setting up a new conda environment 
+Verify:
 
 ```bash
-conda create -n sphae python=3.13
-conda activate sphae
+sphae --version
+# expected: sphae 1.5.5+gpu
 ```
 
-**Container Install**
-There are two versions of the container
+---
 
-1. [Sphae v1.5.5](https://hub.docker.com/repository/docker/npbhavya/sphae)
-   Includes databases, so the container is about 32GB
-   
-   Steps to donwload and run this container
-
-   ```
-    TMPDIR=<where your tmpdir lives>
-    IMAGEDIR-<where you want the image to live>
-    
-    singularity pull --tmpdir $TMPDIR --dir $IMAGEDIR docker://npbhavya/sphae:latest
-    singularity exec sphae_latest.sif sphae --help
-    singularity exec sphae_latest.sif sphae run --help
-
-
-    singularity exec -B <path/to/inputfiles>:/input,<path/to/output>:/output sphae_latest.sif sphae run --input /input --output /output
-   ```
-   
-**Source install**
+## Install databases
 
 ```bash
-#clone sphae repository
-git clone https://github.com/linsalrob/sphae.git
-
-#move to sphae folder
-cd sphae
-
-#install sphae
-pip install -e .
-
-#confirm the workflow is installed by running the below command 
-sphae --help
+sphae install --db_dir /path/to/databases --threads 8 --conda-frontend mamba
 ```
 
-## Installing databases
-Run the below command,
+This downloads ~15 GB and takes 30–90 minutes. Databases:
+
+| Database | Size | Used by |
+|----------|------|---------|
+| pharokka_db | ~280 MB | pharokka annotation |
+| Pfam35.0 | ~280 MB | viral_verify contig classification |
+| checkv-db-v1.5 | ~656 MB | completeness check |
+| phold (ProstT5 + Foldseek) | ~5.7 GB | structural protein annotation (GPU) |
+| phynteny models | ~100 MB | gene function prediction |
+| medaka models | — | Nanopore only; fails on WSL2, safe to skip |
+
+If `download_medaka_models` fails on WSL2, create a stub and rerun install:
 
 ```bash
-#Installs the database to default directory, `sphae/workflow/databases`
-sphae install
-
-#Install database to specific directory
-sphae install --db_dir <directory> 
+mkdir -p /path/to/databases/medaka_models
+touch /path/to/databases/medaka_models/medaka.flag
+sphae install --db_dir /path/to/databases ...
 ```
 
-  Install the databases to a directory, `sphae/workflow/databases`
+---
 
-  This workflow requires the 
-  - Pfam35.0 database to run viral_verify for contig classification. 
-  - CheckV database to test for phage completeness
-  - Pharokka databases 
-  - Phynteny models
-  - Phold databases
-  - Medaka models
-  - PhageTermvirome-4.3 install
+## Running
 
-This step requires ~23G of storage
-If these databases are already installed, skip this step and instead set the envrionment variables pointing to the where these databases are installed
+### Annotate assembled genomes (most common use case)
+
+`--genome` expects a **directory** containing `.fasta` / `.fa` / `.fna` files, not a single file.
 
 ```bash
-#Note to change the file path to the databases.
-#For instance if sphae was installed using conda, the databases by default will be saved to /home/username/miniforge3/envs/sphae/lib/python3.11/site-packages/sphae/workflow/databases
+mkdir -p genomes
+cp my_phage.fasta genomes/
 
-export VVDB=sphae/workflow/databases/Pfam35.0/Pfam-A.hmm.gz
-export CHECKVDB=sphae/workflow/databases/checkv-db-v1.5
-export PHAROKKADB=sphae/workflow/databases/pharokka_db
-export PHYNTENYDB=sphae/workflow/databases/models
-export PHOLDDB=sphae/workflow/databases/phold
+# GPU (default)
+sphae annotate \
+    --genome genomes \
+    --output results \
+    --db_dir /path/to/databases \
+    --threads 8
+
+# CPU fallback
+sphae annotate \
+    --genome genomes \
+    --output results \
+    --db_dir /path/to/databases \
+    --threads 8 \
+    --no-use-gpu
 ```
 
-## Running the workflow
+Multiple phages: put all `.fasta` files in the same directory — sphae processes them all in one run.
 
-Sphae is developed to be modular: 
-- `sphae run` will run QC, assembly and annotation
-- `sphae annotate` will run only annotation steps, here is this an option to provide a genome directory or protein directory
-  
-**Commands to run**
-
-Only one command needs to be submitted to run all the above steps: QC, assembly and assembly stats
+### Full pipeline (QC → assembly → annotation)
 
 ```bash
-#For illumina reads, place the reads both forward and reverse reads to one directory
-#Make sure the fastq reads are saved as {sample_name}_R1.fastq and {sample_name}_R2.fastq or with extensions {sample_name}_R1.fastq.gz
-sphae run --input tests/data/illumina-subset --output example -k
+# Illumina paired-end reads
+sphae run --input reads_dir --output results --use-gpu
 
-#For nanopore reads, place the reads, one file per sample in a directory
-sphae run --input tests/data/nanopore-subset --sequencing longread --output example -k
+# Nanopore
+sphae run --input reads_dir --sequencing longread --output results --use-gpu
 
-#For newer ONT sequencing data where polishing is not required, run the command
-sphae run --input tests/data/nanopore-subset --sequencing longread --output example -k --no_medaka
-
-#To run either of the commands on the cluster, add --executor slurm to the command. There is a little bit of setup to do here.
-#Setup a ~/.config/snakemake/slurm/config.yaml file - https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html#advanced-resource-specifications
-#I may have set this workflow to run only slurm right now, will make it more generic soon.
-sphae run --input tests/data/nanopore-subset --preprocess longread --output example --profile slurm -k --threads 16
+# Nanopore without medaka polishing (recommended on WSL2)
+sphae run --input reads_dir --sequencing longread --output results --use-gpu --no_medaka
 ```
 
-**Command to run only annotation steps and phylogenetic trees**
-This step reruns 
-   - Pharokka, Phold, Phynteny
-   - Phylogenetic tree with terminase large subunit, portal protein
-   
-Here I have also added the option to allow for multiple contigs in a file (multiple phages or frgamented phage genome). 
+### Protein-only annotation
 
 ```bash
-#the genomes directory has the already assembled complete genomes
-#run the export commands to set the database paths 
-sphae annotate --genome <genomes directory> --output example -k
-
-#Alternative
-#in the case that there is already a prefered protein predictions
-#Note: This version doesnt run Phynteny since genbank file is never generated. 
-sphae annotate --protein <protein directory> --output example -k
+sphae annotate --protein protein_dir --output results --db_dir /path/to/databases
 ```
 
-**Output**
+Note: phynteny is skipped in protein-only mode (no GBK file is generated).
 
-Output for `sphae run`, is saved to `example/RESULTS` directory. In this directory, there will be four files 
-  - Genome annotations in GenBank format (Phynteny output)
-  - Genome in fasta format (either the reoriented to terminase output from Pharokka, or assembled viral contigs)
-  - Circular visualization in `png` format (Pharokka output)
-  - Genome summary file
-  - trees folder; Not this folder might be meaningful only if you have tailed phages
-   - all_portal.nwk: Tree using all proteins annotated as "portal protein:
-   - all_terL.nwk: Tree using all proteins annotated as "terminase large subunit"
-  - PhageTerm results saved to a directory - <sample name>_phageterm (only for paired end sequencing)
- 
-Genome summary file includes the following information to help, 
-  - Sample name
-  - Length of the genome 
-  - Coding density
-  - If the assembled contig is circular or not (From checkv)
-  - Completeness (calculated from CheckV)
-  - Contamination (calculated from CheckV)
-  - Taxonomy accession ID (Pharokka output, searches the genome against INPHARED database using mash)
-  - Taxa mash includes the number of matching hashes of the assembled genome to the accession ID/Taxa name. Higher the matching hash- more likely the genome is related to the taxa predicted
-  - Gene searches:
-    - Whether integrase is found (search for integrase gene in annotations)
-    - Whether anti-microbial genes were found (Phold and Pharokka search against AMR database)
-    - Whether any virulence factors were found (Pharokka search against virulence gene database)
-    - Whether any CRISPR spacers were found (Pharokka search against MinCED database) 
+---
 
-   Note: This lines in the file does change when `sphae annotate` is run. In these cases too, depending on `--genome` or `--protein` is used as the input parameter.  
+## Output
 
-Output for `sphae annotate` is saved to `example/final-annotate` directory. In this directory there will be; 
-  - Genome annotations in GenBank format (Phynteny output)
-  - Genome in fasta format (either the reoriented to terminase output from Pharokka, or assembled viral contigs)
-  - Circular visualization in `png` format (Pharokka output)
-  - Genome summary file
-  - trees folder; Not this folder might be meaningful only if you have tailed phages
-   - all_portal.nwk: Tree using all proteins annotated as "portal protein:
-   - all_terL.nwk: Tree using all proteins annotated as "terminase large subunit"
+### `sphae annotate` → `results/final-annotate/<sample>/`
 
-Genome summary file includes the following information to help, 
-  - Sample name
-  - Taxa mash includes the number of matching hashes of the assembled genome to the accession ID/Taxa name. Higher the matching hash- more likely the genome is related to the taxa predicted
-  - Number of CDS, GC percent, coding density 
-  - Gene searches:
-    - Whether integrase is found (search for integrase gene in annotations)
-    - Whether anti-microbial genes were found (Phold and Pharokka search against AMR database)
-    - Whether any virulence factors were found (Pharokka search against virulence gene database)
-    - Whether any CRISPR spacers were found (Pharokka search against MinCED database) 
+| File | Description |
+|------|-------------|
+| `<sample>.gbk` | Full genome annotation (GenBank format, phynteny output) |
+| `<sample>_summary.txt` | Summary: length, GC, completeness, taxonomy, gene hits |
+| `<sample>_summary.functions` | Per-gene function table (pharokka + phold + phynteny) |
+| `<sample>_phold_amr.tsv` | AMR gene hits (CARD database) |
+| `<sample>_phold_vfdb.tsv` | Virulence factor hits |
+| `<sample>_phold_acr.tsv` | Anti-CRISPR hits |
+| `<sample>_phold_defense.tsv` | Defense mechanism hits |
+| `plots/` | Circular genome visualization (phold plot) |
 
+### `sphae run` → `results/RESULTS/<sample>/`
+
+Same annotation outputs plus:
+
+| File | Description |
+|------|-------------|
+| `<sample>.fasta` | Assembled genome (reoriented to terminase if found) |
+| `trees/all_terL.nwk` | Terminase large subunit phylogeny |
+| `trees/all_portal.nwk` | Portal protein phylogeny |
+| `<sample>_phageterm/` | PhageTerm results (paired-end only) |
+
+---
+
+## Windows / WSL2 setup
+
+Full step-by-step guide (DNS, conda, CUDA registration, database paths, common errors):
+→ **[WSL2_SETUP.md](WSL2_SETUP.md)**
+
+Quick checklist:
+1. Run from `~/sphae-work`, never from `/mnt/c/` (NTFS breaks snakemake)
+2. `conda config --set channel_priority flexible` (strict breaks pharokka)
+3. Register CUDA libs once: `echo /usr/lib/wsl/lib | sudo tee /etc/ld.so.conf.d/wsl.conf && sudo ldconfig`
+4. Install from this fork, not PyPI
+
+---
 
 ## FAQ
-1. **"Failed during assembly":**
-   - This message indicates that the assembly process was unsuccessful. It suggests that the assembler could not generate contigs, which are contiguous sequences of DNA, typically representing segments of a genome. 
-   - To confirm this, you can check the logs located at `sphae.out/PROCESSING/assembly/flye/<sample name>/assembly_info.txt` or `sphae.out/PROCESSING/assembly/megahit/<sample name>/log`. These logs should provide details about the error or the step at which the assembly failed.
-   - One possible reason for this failure could be insufficient genome coverage, meaning that there were not enough sequencing reads to accurately assemble the genome.
 
-2. **"Genome includes multiple contigs, fragmented":**
-   - This message indicates that the assembly generated numerous short fragments (contigs) instead of a single, contiguous sequence representing a nearly complete phage genome. 
-   - You can verify this by examining the file `sphae.out/PROCESSING/assembly/flye/<sample name>-assembly-stats_flye.csv` or `sphae.out/PROCESSING/assembly/megahit/<sample name>-assembly-stats_megahit.csv`.
-   - Each row in these tables represents a contig along with its characteristics. If none of the contigs are identified as viral and do not meet a certain completeness threshold (e.g., greater than 70% completeness), it suggests that the assembly consists of fragmented contigs.
-   - Fragmented contigs make it challenging to accurately identify genes. To address this issue, you may need to resequence the phages for better coverage or try using different assembly algorithms.
+**"Genome samples: []" — nothing to annotate**
+You passed a file path to `--genome`. It must be a directory:
+```bash
+mkdir genomes && mv my_phage.fasta genomes/
+sphae annotate --genome genomes ...
+```
 
-3. **"Good genome coverage but still encountering assembly issues":**
-   - If you have adequate genome coverage but still face assembly problems, you may consider adjusting the subsampling step in sphae. This step involves randomly selecting a subset of reads to reduce the computational burden.
-   - To modify the subsampling parameters, navigate to the `config/config.yaml` file and update the line under `subsample` section, for example:
-     ```
-     subsample:
-         --bases 1000M
-     ```
-   - Increase or decrease the number of bases (e.g., `1000M` for 1000 megabases) based on your requirements.
-   - After making the changes, rerun sphae and ensure that the updated subsampling parameters are reflected in the `sphae.out/sphae.config.yaml` file.
+**"Foldseek not found. Please reinstall phold."**
+Old conda env from a previous install. Delete it and rerun:
+```bash
+rm -rf ~/miniforge3/lib/python*/site-packages/sphae/workflow/conda/HASH_*
+sphae annotate ...
+```
 
-4. **"What does 'No integrases found ...but Phynteny predicted a few unknown function genes to have some similarity with integrase genes but with low confidence. Maybe a false positive or a novel integrase gene' mean?"**
-   This message indicates that while no integrase genes were explicitly identified, the analysis detected certain genes that exhibited similarities to integrase genes. However, these genes were associated with low confidence scores, suggesting a possibility of being false positives or potentially representing novel integrase genes.
-   
-   [Phynteny](https://github.com/susiegriggo/Phynteny), the tool used for this prediction, assigns a confidence score to each gene prediction. If this score falls below a certain threshold (typically 90%), the gene remains classified as having an unknown function. To further investigate these genes, advanced techniques such as folding using tools like [ColabFold](https://github.com/sokrypton/ColabFold) and [Foldseek](https://github.com/steineggerlab/foldseek) can be employed. Analyzing the structure of these genes may provide additional insights into their functionality and potential role in biological processes.
+**"No available GPU was found" / "Using device: cpu"**
+PyTorch can't find the CUDA driver. Check:
+```bash
+ldconfig -p | grep libcuda   # should return /usr/lib/wsl/lib/libcuda.so.1
+nvidia-smi                   # should show your GPU
+```
+If `ldconfig` returns nothing — run step 3 of the WSL2 checklist above.
 
-5. **How do I visualize the phages and gene annotations?**
-   To visualize the phages and gene annotations, I recommend using [Clinker](https://github.com/gamcil/clinker). First, gather all the sample genbank files from `sphae.out/RESULTS` and place them in a new directory. Then, execute the clinker command to generate clinker plots, which compare the genes in each genome to each other.
-   
-   Additionally, for enhanced visualization, consider running [dnaapler](https://github.com/gbouras13/dnaapler) on the genomes in fasta format obtained from 
-   `sphae.out/RESULTS`. This step generates reoriented phages that start with terminase genes. Pharokka -> Phold -> Phynteny has to be rerun, and the resulting genbank files can be used for visualization. To perform the annotation steps, run the command 
-   `sphae annotate --input <reoriented genomes from dnaapler in fasta format directory>`
-   
-   Please note that dnaapler may fail if terminase genes are not found, particularly when working with novel phages. The reason these steps haven't been added to sphae. If you encounter any challenges during this process, please feel free to leave an issue, and I'll provide improved documentation to assist you further with the command on how to install and run the command different commands. 
+**"ValueError: torch.load ... CVE-2025-32434"**
+Old phold env with torch < 2.6. Delete old envs and reinstall:
+```bash
+pip install --force-reinstall git+https://github.com/sprinterz5/sphae.git@gpu-support
+rm -rf ~/miniforge3/lib/python*/site-packages/sphae/workflow/conda/HASH_*
+sphae annotate ...
+```
 
-6. **Where are the intermediate files being saved?**
-   These files are being saved in `sphae.out/PROCESSING`. If you need more information on the file structure here, or have ideas of better organization then leave an issue and I will make a note to have more documentation. 
+**"PermissionError: Operation not permitted: '.../.snakemake/...'"**
+Running from `/mnt/c/` or Desktop. Move to the Linux filesystem:
+```bash
+mkdir -p ~/sphae-work && cd ~/sphae-work
+```
 
-7. **Just run annotation on already assembled genomes?**
+**"Failed during assembly"**
+Assembly couldn't produce contigs — usually low coverage. Check logs at
+`results/PROCESSING/assembly/flye/<sample>/assembly_info.txt`.
 
-    `sphae annotate --genome <input genomes>`
-    This command runs only Pharokka, Phold and Phynteny to annotate the assembled genomes. The results are saved to a new directory labeled `sphae.out/annotation`. 
+**"Genome includes multiple contigs, fragmented"**
+Assembly produced short fragments instead of a complete genome.
+Verify at `results/PROCESSING/assembly/flye/<sample>-assembly-stats_flye.csv`.
+Options: resequence for better coverage, or try a different assembler.
 
-    Note: Currently, Sphae runs Phold in CPU mode, but efforts are underway to support Phold GPU mode for faster processing of this step.
+**How do I visualize gene annotations?**
+Use [Clinker](https://github.com/gamcil/clinker) on the GenBank files from `results/final-annotate/`.
+For reoriented genomes, run [dnaapler](https://github.com/gbouras13/dnaapler) first, then `sphae annotate` again on the reoriented fastas.
 
-8. How to change the number of base pairs to subsample for a sample?
-    Run the command `sphae config`
-    This copies the config file within the workflow to the current directory. Open this file and update the line `bases: 10000000` to for instance `bases: 300000`
-    Then run sphae run with the command `sphae run --input tests/data/illumina-subset --output example -k --config <path to the config file with the change>`
-   
-9. The intermedidate files are saved to `example/PROCESSING`. Here there should be the following folders
-   - fastp: Quality control of reads 
-   - assembly: megahit or flye assemblies for each sample 
-   - genome:  contains the genomes identified in each sample. If there are multiple genomes identified, they will be listed in the sample folder here
-   - annotate: pharokka, phold and phynteny outputs 
-   - phylogeny: the terL and portal genes identified and their nwk files 
-   - phageterm: phageterm outputs for each sample. 
+**How do I change subsampling depth?**
+```bash
+sphae config   # copies config.yaml to current directory
+# edit: bases: 10000000 → your value
+sphae run --input ... --config config.yaml
+```
 
+---
 
-## Citation
-To cite sphae, doi: https://doi.org/10.1101/2024.11.18.624194
+## Upstream project
 
-## Issues and Questions
+This fork is based on [sphae](https://github.com/linsalrob/sphae) by the Edwards Lab.
 
-If you come across any issues or errors, report them under [Issues](https://github.com/linsalrob/sphae/issues). 
+**Cite sphae:** https://doi.org/10.1093/bioadv/vbaf004
 
-
+Issues with the GPU fork → open an issue in this repo.
+Issues with core sphae functionality → open an issue in the [upstream repo](https://github.com/linsalrob/sphae/issues).
