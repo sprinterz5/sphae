@@ -1,7 +1,7 @@
 # Установка sphae (GPU) на Windows 11 — пошаговый гайд
 
 > **Для кого:** Windows 11, NVIDIA GPU, хочешь запускать sphae с GPU через WSL2.
-> Если GPU нет — всё то же самое, только на шаге 6 добавляешь `--no-use-gpu`.
+> Если GPU нет — всё то же самое, только на шаге 9 добавляешь `--no-use-gpu`.
 
 ---
 
@@ -61,7 +61,26 @@ conda config --set channel_priority flexible
 
 ---
 
-## Шаг 5 — Установить sphae с GPU-форка
+## Шаг 5 — Зарегистрировать CUDA библиотеки WSL2 (один раз)
+
+NVIDIA-драйвер кладёт `libcuda.so.1` в `/usr/lib/wsl/lib/`, но динамический линкер его
+там не ищет по умолчанию. Без этого шага PyTorch не видит GPU:
+
+```bash
+echo /usr/lib/wsl/lib | sudo tee /etc/ld.so.conf.d/wsl.conf
+sudo ldconfig
+```
+
+Проверить:
+
+```bash
+ldconfig -p | grep libcuda
+# ожидается: libcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1
+```
+
+---
+
+## Шаг 6 — Установить sphae с GPU-форка
 
 ```bash
 pip install git+https://github.com/sprinterz5/sphae.git@gpu-support
@@ -74,7 +93,7 @@ pip install git+https://github.com/sprinterz5/sphae.git@gpu-support
 
 ---
 
-## Шаг 6 — Создать рабочую директорию
+## Шаг 7 — Создать рабочую директорию
 
 ```bash
 mkdir -p ~/sphae-work && cd ~/sphae-work
@@ -86,7 +105,7 @@ mkdir -p ~/sphae-work && cd ~/sphae-work
 
 ---
 
-## Шаг 7 — Скачать базы данных
+## Шаг 8 — Скачать базы данных
 
 Определить куда сохранять. Если есть второй диск D:
 
@@ -103,6 +122,7 @@ DB_DIR=~/sphae-databases
 Запустить установку:
 
 ```bash
+cd ~/sphae-work
 sphae install --db_dir $DB_DIR --threads 8 --conda-frontend mamba
 ```
 
@@ -123,37 +143,28 @@ touch $DB_DIR/medaka_models/medaka.flag
 
 ---
 
-## Шаг 8 — Проверить GPU
+## Шаг 9 — Запустить аннотацию генома фага
+
+Подготовить папку с геномом (важно: `--genome` принимает **папку**, не файл):
 
 ```bash
-# Посмотреть что видит NVIDIA
-nvidia-smi
-
-# Проверить PyTorch внутри phold-окружения
-PHOLD_ENV=$(ls ~/sphae-work/.snakemake/conda/ | grep -m1 "^1367")
-conda run -p ~/sphae-work/.snakemake/conda/${PHOLD_ENV} \
-    python -c "import torch; print('CUDA:', torch.cuda.is_available(), '| Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+mkdir -p ~/sphae-work/genomes
+# скопировать .fasta/.fa/.fna файл(ы) в эту папку
+cp /путь/к/фагу.fasta ~/sphae-work/genomes/
 ```
 
-Ожидаемый вывод: `CUDA: True | Device: NVIDIA GeForce RTX ...`
-
----
-
-## Шаг 9 — Запустить аннотацию генома фага
+Запустить:
 
 ```bash
 cd ~/sphae-work
 
 sphae annotate \
-    --genome /путь/к/папке/с/fasta \
+    --genome genomes \
     --output results \
     --db_dir $DB_DIR \
     --threads 8 \
-    --conda-frontend mamba \
     --use-gpu
 ```
-
-Папка `--genome` должна содержать `.fasta` или `.fa` файлы.
 
 Без GPU:
 
@@ -184,20 +195,47 @@ sphae annotate ... --no-use-gpu
 cd ~/sphae-work && sphae install ...
 ```
 
+### `Genome samples: []` (ничего не аннотируется)
+Передан файл вместо папки. `--genome` должен быть папкой с `.fasta` файлами:
+```bash
+mkdir genomes && mv my_phage.fasta genomes/
+sphae annotate --genome genomes ...
+```
+
+### `No available GPU was found` / `Using device: cpu`
+PyTorch не видит GPU. Проверить:
+```bash
+ldconfig -p | grep libcuda   # должно найти /usr/lib/wsl/lib/libcuda.so.1
+```
+Если пусто — выполнить Шаг 5. Если уже выполнен — проверить `nvidia-smi` из WSL2:
+```bash
+nvidia-smi   # должен показать GPU
+```
+
+### `Foldseek not found. Please reinstall phold.`
+Старый conda env без foldseek. Удалить env и перезапустить:
+```bash
+# найти путь к env
+ls ~/miniforge3/lib/python*/site-packages/sphae/workflow/conda/
+# удалить env с phold
+rm -rf ~/miniforge3/lib/python*/site-packages/sphae/workflow/conda/HASH_*
+sphae annotate ...   # snakemake пересоберёт env
+```
+
 ### `ModuleNotFoundError: No module named 'requests'`
 Установлена PyPI-версия sphae. Переустановить с форка:
 ```bash
 pip install --force-reinstall git+https://github.com/sprinterz5/sphae.git@gpu-support
-rm -rf ~/sphae-work/.snakemake/conda/c4c7c12328bdd72e35b132f6b156a281_*
 sphae install ...
 ```
 
 ### `ValueError: ...torch.load...CVE-2025-32434`
-Та же причина — старый phold.yaml из PyPI. То же решение: переустановить с форка:
+Та же причина — старый phold env из PyPI. То же решение: переустановить с форка и
+удалить старый conda env:
 ```bash
 pip install --force-reinstall git+https://github.com/sprinterz5/sphae.git@gpu-support
-rm -rf ~/sphae-work/.snakemake/conda/1367cd8cb4d8bb15a870f8137840eb73_*
-sphae install ...
+rm -rf ~/miniforge3/lib/python*/site-packages/sphae/workflow/conda/HASH_*
+sphae annotate ...
 ```
 
 ### `LibMambaUnsatisfiableError: ...biopython excluded by strict repo priority`
@@ -206,7 +244,7 @@ conda config --set channel_priority flexible
 ```
 
 ### `ImportError: libtorch_cpu.so: cannot enable executable stack`
-Это medaka на WSL2. Создать fake-флаг (см. Шаг 7).
+Это medaka на WSL2. Создать fake-флаг (см. Шаг 8).
 
 ---
 
@@ -220,4 +258,4 @@ conda config --set channel_priority flexible
 | GPU | любая NVIDIA (driver ≥ 525) | RTX серия, 8+ ГБ VRAM |
 | CUDA | 12.x через driver | — |
 
-GPU необязателен — без него phold работает на CPU, просто медленнее (~5–10× дольше).
+GPU необязателен — без него phold работает на CPU, просто медленнее (~10–20× дольше).
