@@ -8,9 +8,9 @@ channels:
 dependencies:
     - python=3.10
     - setuptools<70
-    # CUDA-enabled PyTorch — must come before phynteny_transformer so bioconda
-    # does not override with a CPU build.
-    - pytorch>=2.1.0
-    - pytorch-cuda=12.4
+    - requests
+    # PyTorch >= 2.6 required: transformers CVE-2025-32434 check blocks older versions.
+    - pytorch>=2.6.0
+    - pytorch-cuda=12.6
     - pip:
         - phynteny_transformer>=0.1.3

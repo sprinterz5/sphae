@@ -8,10 +8,10 @@ channels:
 dependencies:
     - python==3.9.21
     - pip
-    # CUDA-enabled PyTorch — must come from pytorch+nvidia channels
-    # before phold is installed so bioconda does not override it with the CPU build.
-    - pytorch>=2.1.0
-    - pytorch-cuda=12.4
+    # PyTorch >= 2.6 required: transformers CVE-2025-32434 check blocks older versions.
+    # pytorch-cuda=12.6 works with driver >= 525 (user has 610.47).
+    - pytorch>=2.6.0
+    - pytorch-cuda=12.6
     - genbank_to
     - pip:
-        - phold>=1.1.0
+        - phold>=1.2.5
