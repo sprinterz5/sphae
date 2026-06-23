@@ -30,7 +30,7 @@ Tested with NVIDIA RTX 4060 Laptop (8 GB VRAM), driver 610.47, CUDA UMD 13.3.
 
 | File | Change |
 |------|--------|
-| `sphae/workflow/envs/phold.yaml` | Added `pytorch` + `nvidia` channels; `pytorch>=2.6.0` + `pytorch-cuda=12.6` as conda deps (≥2.6 required by CVE-2025-32434); moved `phold>=1.2.5` to `pip:` to prevent bioconda overriding CUDA torch. |
+| `sphae/workflow/envs/phold.yaml` | Added `pytorch` + `nvidia` channels; `pytorch>=2.6.0` + `pytorch-cuda=12.4` as conda deps (≥2.6 required by CVE-2025-32434); moved `phold>=1.2.5` to `pip:` to prevent bioconda overriding CUDA torch. |
 | `sphae/workflow/envs/phynteny.yaml` | Same CUDA torch treatment; added `requests` to conda deps (required by `install_models` script); `phynteny_transformer>=0.1.3` via pip. |
 
 ### Pipeline rules & CLI
@@ -98,7 +98,7 @@ conda run -n phold python -c "import torch; print(torch.cuda.is_available())"
 
 ## CUDA version note
 
-`pytorch-cuda=12.6` works with any NVIDIA driver ≥ 525.60 (CUDA 12.x backward compat).
+`pytorch-cuda=12.4` works with any NVIDIA driver ≥ 525.60 (CUDA 12.x backward compat).
 The RTX 4060 laptop (driver 610.47, CUDA UMD 13.3) easily satisfies this.
 
 ---
@@ -182,6 +182,6 @@ didn't list it as a dependency. Fixed in this fork: `requests` is now a conda de
 | Package | Why this version |
 |---------|-----------------|
 | `pytorch>=2.6.0` | CVE-2025-32434: `transformers` blocks `torch.load` on older versions |
-| `pytorch-cuda=12.6` | Matches driver 610.47 (CUDA UMD 13.3); backward compat ≥ driver 525 |
+| `pytorch-cuda=12.4` | Matches driver 610.47 (CUDA UMD 13.3); backward compat ≥ driver 525 |
 | `phold>=1.2.5` | Older phold had `download_requests()` signature bug (too few positional args) |
 | `phynteny_transformer>=0.1.3` | Minimum version supporting PyTorch 2.x |

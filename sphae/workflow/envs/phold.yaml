@@ -11,7 +11,7 @@ dependencies:
     # PyTorch >= 2.6 required: transformers CVE-2025-32434 check blocks older versions.
     # pytorch-cuda=12.6 works with driver >= 525 (user has 610.47).
     - pytorch>=2.6.0
-    - pytorch-cuda=12.6
+    - pytorch-cuda=12.4
     - genbank_to
     - pip:
         - phold>=1.2.5

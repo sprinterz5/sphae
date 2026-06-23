@@ -11,6 +11,6 @@ dependencies:
     - requests
     # PyTorch >= 2.6 required: transformers CVE-2025-32434 check blocks older versions.
     - pytorch>=2.6.0
-    - pytorch-cuda=12.6
+    - pytorch-cuda=12.4
     - pip:
         - phynteny_transformer>=0.1.3
