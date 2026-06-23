@@ -124,6 +124,8 @@ sphae annotate --proteins <proteins> --output <output> #define output
 @click.option('--temp-dir', 'temp_dir', help='Temp directory', required=False)
 @click.option('--use-conda/--no-use-conda', default=True, help='Use conda for Snakemake rules',show_default=True)
 @click.option('--conda-frontend', default='mamba', show_default=True, type=str, help='Conda frontend to use (e.g. mamba, conda)')
+@click.option('--conda-prefix', default=snake_base(os.path.join('workflow', 'conda')),
+              help='Custom conda env directory', type=click.Path(), show_default=True)
 @click.option('--snake-default', multiple=True,default=['--rerun-incomplete', '--printshellcmds', '--nolock', '--show-failed-logs'], help="Customise Snakemake runtime args", show_default=True)
 @click.option("--log", default="sphae.log", callback=default_to_output, hidden=True,)
 @click.option("--system-config", default=snake_base(os.path.join("config", "config.yaml")),hidden=True,)
