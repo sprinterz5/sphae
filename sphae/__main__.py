@@ -28,6 +28,18 @@ def print_citation():
             echo_click(line)
 
 
+def resolve_db_paths(db_dir):
+    """Compute individual database paths from --db_dir."""
+    if not db_dir:
+        return {}
+    return {
+        "pharokka_db": os.path.join(db_dir, "pharokka_db"),
+        "checkv_db":   os.path.join(db_dir, "checkv-db-v1.5"),
+        "phold_db":    os.path.join(db_dir, "phold"),
+        "phynteny_db": os.path.join(db_dir, "models"),
+    }
+
+
 def default_to_output(ctx, param, value):
     """Callback for click options; places value in output directory unless specified"""
     if param.default == value:
@@ -162,11 +174,12 @@ def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, **
         )
     """Annotate option"""
     copy_config(configfile, system_config=snake_base(os.path.join('config', 'config.yaml')))
-    
+
     merge_config = {
         'args': {
-            "db_dir": db_dir, 
-            "output": output, 
+            "db_dir": db_dir,
+            **resolve_db_paths(db_dir),
+            "output": output,
             "genome": genome,
             "proteins": proteins,
             "temp_dir": temp_dir,
@@ -186,14 +199,16 @@ def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, **
 @common_options
 @click.option('--sequencing', 'sequencing', help="sequencing method", default='paired', show_default=True, type=click.Choice(['paired', 'longread']))
 @click.option('--no_medaka', 'no_medaka', help="turns off Medaka polishing for --sequencing longread", is_flag=True, default=False)
-def run(_input, output, sequencing, no_medaka, temp_dir, configfile, use_gpu, **kwargs):
+def run(_input, output, sequencing, no_medaka, temp_dir, configfile, use_gpu, db_dir=None, **kwargs):
     """Run sphae"""
     copy_config(configfile, system_config=snake_base(os.path.join('config', 'config.yaml')))
 
     merge_config = {
         "args": {
-            "input": _input, 
-            "output": output, 
+            "input": _input,
+            "db_dir": db_dir,
+            **resolve_db_paths(db_dir),
+            "output": output,
             "sequencing": sequencing,
             "no_medaka": no_medaka,
             "configfile": configfile,
