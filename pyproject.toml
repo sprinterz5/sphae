@@ -42,3 +42,6 @@ sphae = "sphae.__main__:main"
 
 [tool.setuptools]
 packages = ["sphae"]
+
+[tool.setuptools.package-data]
+sphae = ["tests/data/**/*", "workflow/**/*", "config/**/*"]
