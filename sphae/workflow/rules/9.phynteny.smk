@@ -17,7 +17,8 @@ rule phynteny_run_paired:
         config['resources']['smalljob']['threads']
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phynteny.{sample}.log")
     shell:
@@ -79,7 +80,8 @@ rule phynteny_run_nanopore:
         config['resources']['smalljob']['threads']
     resources:
         mem_mb = config['resources']['smalljob']['mem_mb'],
-        runtime = config['resources']['smalljob']['runtime']
+        runtime = config['resources']['smalljob']['runtime'],
+        gpu = PHOLD_GPU_RESOURCE
     log:
         os.path.join(dir_log, "phynteny.{sample}.log")
     shell:
