@@ -1,0 +1,8 @@
+name: prodigal
+channels:
+    - bioconda
+    - conda-forge
+    - defaults
+dependencies:
+    - prodigal-gv
+    - biopython
