@@ -163,16 +163,29 @@ rule phold_compare_genome:
     shell:
         """
         if [[ -s {input.gbk} ]] ; then
-            phold compare \
-                -i {input.gbk} \
-                --predictions_dir {params.predict} \
-                -p {params.prefix} \
-                -o {params.o} \
-                -t {threads} \
-                -d {params.db} \
-                -f \
-                {params.foldseek_gpu} \
-                2> {log}
+            if phold compare \
+                    -i {input.gbk} \
+                    --predictions_dir {params.predict} \
+                    -p {params.prefix} \
+                    -o {params.o} \
+                    -t {threads} \
+                    -d {params.db} \
+                    -f \
+                    {params.foldseek_gpu} \
+                    2> {log} ; then
+                echo "phold compare OK" >> {log}
+            else
+                echo "phold compare with foldseek_gpu failed, retrying without GPU" >> {log}
+                phold compare \
+                    -i {input.gbk} \
+                    --predictions_dir {params.predict} \
+                    -p {params.prefix} \
+                    -o {params.o} \
+                    -t {threads} \
+                    -d {params.db} \
+                    -f \
+                    2>> {log}
+            fi
         else
             touch {output.gbk}
             touch {output.acr}
