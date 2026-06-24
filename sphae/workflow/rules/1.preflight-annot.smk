@@ -19,6 +19,7 @@ phold uses the GPU by default; passing --cpu forces CPU. We therefore inject
 USE_GPU = bool(config['args'].get('use_gpu', False))
 PHOLD_CPU_FLAG = "" if USE_GPU else "--cpu"
 PHOLD_GPU_RESOURCE = 1 if USE_GPU else 0
+PHOLD_FOLDSEEK_GPU_FLAG = "--foldseek_gpu" if USE_GPU else ""
 
 """
 DIRECTORIES

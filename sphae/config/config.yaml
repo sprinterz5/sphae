@@ -18,6 +18,7 @@ params:
   bases: 10000000
   #gene-predict: 'phanotate'
   gene-predict: 'prodigal-gv'
+  phold_batch_size: 32
 
 db:
   pfam: "ftp://ftp.ebi.ac.uk/pub/databases/Pfam/releases/"

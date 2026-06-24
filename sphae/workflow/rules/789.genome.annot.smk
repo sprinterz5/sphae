@@ -9,6 +9,13 @@ PATTERNS
 PATTERN_LONG = "{sample}.fasta"
 
 """
+BATCH PREDICT PATHS — shared across all samples
+"""
+BATCH_PREDICT_DIR = os.path.join(dir_annot, "batch-predict")
+BATCH_PREDICT_GBK = os.path.join(dir_annot, "batch-predict-input", "all_samples.gbk")
+BATCH_PREDICT_SENTINEL = os.path.join(BATCH_PREDICT_DIR, ".done")
+
+"""
 RESOLVER FUNCTION
 """
 def resolve_input(wc):
@@ -72,15 +79,72 @@ rule checkv_run_genome:
         """
 
 
-rule phold_run_genome:
+rule phold_predict_batch:
+    """
+    Run ProstT5 embeddings for ALL samples in ONE GPU pass.
+    Model loads once; proteins from all phages are embedded together.
+    phold compare (per-sample) reuses the shared predictions_dir.
+    """
     input:
-        gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk")
+        gbks=expand(
+            os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
+            sample=samples_names
+        ),
     params:
-        predict=os.path.join(dir_annot, "{sample}-predict"),
+        merged=BATCH_PREDICT_GBK,
+        outdir=BATCH_PREDICT_DIR,
+        prefix="batch",
+        db=config['args']['phold_db'],
+        cpu=PHOLD_CPU_FLAG,
+        batch_size=config['params'].get('phold_batch_size', 32),
+        script=os.path.join(dir_script, "merge_gbk_for_batch.py"),
+    output:
+        sentinel=BATCH_PREDICT_SENTINEL,
+    conda:
+        os.path.join(dir_env, "phold.yaml")
+    threads:
+        config['resources']['smalljob']['threads']
+    resources:
+        mem_mb=config['resources']['bigjob']['mem_mb'],
+        runtime=config['resources']['bigjob']['runtime'],
+        gpu=PHOLD_GPU_RESOURCE,
+    log:
+        os.path.join(dir_log, "phold_predict_batch.log")
+    shell:
+        """
+        mkdir -p $(dirname {params.merged})
+        python {params.script} {params.merged} {input.gbks}
+        if [[ -s {params.merged} ]] ; then
+            phold predict \
+                -i {params.merged} \
+                -o {params.outdir} \
+                -p {params.prefix} \
+                -t {threads} \
+                {params.cpu} \
+                -d {params.db} \
+                -f \
+                --batch_size {params.batch_size} \
+                --finetune \
+                2> {log}
+        fi
+        touch {output.sentinel}
+        """
+
+
+rule phold_compare_genome:
+    """
+    Per-sample Foldseek structural search using the shared batch predictions dir.
+    Runs in parallel across samples (CPU-bound, no GPU needed here).
+    """
+    input:
+        gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
+        sentinel=BATCH_PREDICT_SENTINEL,
+    params:
+        predict=BATCH_PREDICT_DIR,
         o=os.path.join(dir_annot, "{sample}-phold"),
         prefix="{sample}",
         db=config['args']['phold_db'],
-        cpu=PHOLD_CPU_FLAG,
+        foldseek_gpu=PHOLD_FOLDSEEK_GPU_FLAG,
     output:
         gbk=os.path.join(dir_annot, "{sample}-phold", "{sample}.gbk"),
         acr=os.path.join(dir_annot, "{sample}-phold", "sub_db_tophits", "acr_cds_predictions.tsv"),
@@ -94,14 +158,21 @@ rule phold_run_genome:
     resources:
         mem_mb=config['resources']['smalljob']['mem_mb'],
         runtime=config['resources']['smalljob']['runtime'],
-        gpu=PHOLD_GPU_RESOURCE,
     log:
-        os.path.join(dir_log, "phold.{sample}.log")
+        os.path.join(dir_log, "phold_compare.{sample}.log")
     shell:
         """
         if [[ -s {input.gbk} ]] ; then
-            phold predict -i {input.gbk} -o {params.predict} -p {params.prefix} -t {threads} {params.cpu} -d {params.db} -f 2> {log}
-            phold compare -i {input.gbk} --predictions_dir {params.predict} -p {params.prefix} -o {params.o} -t {threads} -d {params.db} -f 2> {log}
+            phold compare \
+                -i {input.gbk} \
+                --predictions_dir {params.predict} \
+                -p {params.prefix} \
+                -o {params.o} \
+                -t {threads} \
+                -d {params.db} \
+                -f \
+                {params.foldseek_gpu} \
+                2> {log}
         else
             touch {output.gbk}
             touch {output.acr}

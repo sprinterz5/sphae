@@ -1,6 +1,7 @@
 
 targets = {'annotate':[]}
 if config['args'].get('genome'):
+    targets['annotate'].append(BATCH_PREDICT_SENTINEL)
     targets['annotate'].append(expand(os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"), sample=samples_names))
     targets['annotate'].append(expand(os.path.join(dir_annot, "{sample}-checkv", "quality_summary.tsv"), sample=samples_names))
     targets['annotate'].append(expand(os.path.join(dir_annot, "{sample}-phold", "{sample}.gbk"), sample=samples_names))
