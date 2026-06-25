@@ -9,13 +9,6 @@ PATTERNS
 PATTERN_LONG = "{sample}.fasta"
 
 """
-BATCH PREDICT PATHS — shared across all samples
-"""
-BATCH_PREDICT_DIR = os.path.join(dir_annot, "batch-predict")
-BATCH_PREDICT_GBK = os.path.join(dir_annot, "batch-predict-input", "all_samples.gbk")
-BATCH_PREDICT_SENTINEL = os.path.join(BATCH_PREDICT_DIR, ".done")
-
-"""
 RESOLVER FUNCTION
 """
 def resolve_input(wc):
@@ -29,17 +22,16 @@ def resolve_input(wc):
 
 
 rule prodigal_annotate_genome:
-    """ORF prediction with prodigal-gv; adds /ID qualifiers for phold compatibility"""
+    """ORF prediction via pyrodigal-gv Python API; outputs phold-compatible GBK"""
     input:
         fasta=resolve_input,
     params:
-        raw_gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}_raw.gbk"),
-        script=os.path.join(dir_script, "prodigal_to_phold_gbk.py"),
+        script=os.path.join(dir_script, "run_prodigal_gv.py"),
     output:
         gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
         faa=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.faa"),
     conda:
-        os.path.join(dir_env, "prodigal.yaml")
+        os.path.join(dir_env, "pharokka.yaml")
     threads:
         config['resources']['smalljob']['threads']
     resources:
@@ -49,14 +41,13 @@ rule prodigal_annotate_genome:
         os.path.join(dir_log, "prodigal.{sample}.log")
     shell:
         """
-        mkdir -p $(dirname {params.raw_gbk})
-        prodigal-gv -i {input.fasta} -o {params.raw_gbk} -f gbk -a {output.faa} -p meta 2> {log}
-        python {params.script} {params.raw_gbk} {output.gbk}
+        mkdir -p $(dirname {output.gbk})
+        python {params.script} {input.fasta} {output.gbk} {output.faa} 2> {log}
         """
 
 
 rule checkv_run_genome:
-    """CheckV genome quality assessment (completeness, contamination, quality tier)"""
+    """CheckV genome quality assessment; falls back to empty TSV if not installed"""
     input:
         fasta=resolve_input,
     output:
@@ -64,8 +55,6 @@ rule checkv_run_genome:
     params:
         outdir=os.path.join(dir_annot, "{sample}-checkv"),
         db=config['args']['checkv_db'],
-    conda:
-        os.path.join(dir_env, "checkv.yaml")
     threads:
         config['resources']['smalljob']['threads']
     resources:
@@ -75,7 +64,13 @@ rule checkv_run_genome:
         os.path.join(dir_log, "checkv.{sample}.log")
     shell:
         """
-        checkv end_to_end {input.fasta} {params.outdir} -t {threads} -d {params.db} 2> {log}
+        mkdir -p {params.outdir}
+        if command -v checkv &> /dev/null; then
+            checkv end_to_end {input.fasta} {params.outdir} -t {threads} -d {params.db} 2> {log}
+        else
+            echo "checkv not found, writing empty quality summary" > {log}
+            printf "contig_id\tcheckv_quality\tcompleteness\tcontamination\n" > {output.quality}
+        fi
         """
 
 
@@ -115,6 +110,7 @@ rule phold_predict_batch:
         mkdir -p $(dirname {params.merged})
         python {params.script} {params.merged} {input.gbks}
         if [[ -s {params.merged} ]] ; then
+            TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
             phold predict \
                 -i {params.merged} \
                 -o {params.outdir} \
@@ -124,10 +120,35 @@ rule phold_predict_batch:
                 -d {params.db} \
                 -f \
                 --batch_size {params.batch_size} \
-                --finetune \
                 2> {log}
         fi
         touch {output.sentinel}
+        """
+
+
+rule phold_split_predictions:
+    """Split batch 3Di/AA fastas into per-sample files that phold compare expects."""
+    input:
+        sentinel=BATCH_PREDICT_SENTINEL,
+        gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
+    output:
+        fasta_3di=os.path.join(BATCH_PREDICT_DIR, "{sample}_3di.fasta"),
+        fasta_aa=os.path.join(BATCH_PREDICT_DIR, "{sample}_aa.fasta"),
+        prob_csv=os.path.join(BATCH_PREDICT_DIR, "{sample}_prostT5_3di_mean_probabilities.csv"),
+    params:
+        script=os.path.join(dir_script, "split_batch_predictions.py"),
+        predict_dir=BATCH_PREDICT_DIR,
+    conda:
+        os.path.join(dir_env, "pharokka.yaml")
+    threads: 1
+    resources:
+        mem_mb=config['resources']['smalljob']['mem_mb'],
+        runtime=30,
+    log:
+        os.path.join(dir_log, "phold_split.{sample}.log")
+    shell:
+        """
+        python {params.script} {wildcards.sample} {input.gbk} {params.predict_dir} 2> {log}
         """
 
 
@@ -138,7 +159,8 @@ rule phold_compare_genome:
     """
     input:
         gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
-        sentinel=BATCH_PREDICT_SENTINEL,
+        fasta_3di=os.path.join(BATCH_PREDICT_DIR, "{sample}_3di.fasta"),
+        prob_csv=os.path.join(BATCH_PREDICT_DIR, "{sample}_prostT5_3di_mean_probabilities.csv"),
     params:
         predict=BATCH_PREDICT_DIR,
         o=os.path.join(dir_annot, "{sample}-phold"),

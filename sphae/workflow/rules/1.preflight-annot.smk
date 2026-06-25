@@ -100,6 +100,10 @@ dir_log = os.path.join(dir_out, 'logs')
 dir_env = os.path.join(workflow.basedir, "envs")
 dir_script = os.path.join(workflow.basedir, "scripts")
 
+BATCH_PREDICT_DIR      = os.path.join(dir_annot, "batch-predict")
+BATCH_PREDICT_GBK      = os.path.join(dir_annot, "batch-predict-input", "all_samples.gbk")
+BATCH_PREDICT_SENTINEL = os.path.join(BATCH_PREDICT_DIR, ".done")
+
 
 """
 MERGE SAMPLE SPACE
