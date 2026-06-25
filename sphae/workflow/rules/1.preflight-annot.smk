@@ -100,9 +100,15 @@ dir_log = os.path.join(dir_out, 'logs')
 dir_env = os.path.join(workflow.basedir, "envs")
 dir_script = os.path.join(workflow.basedir, "scripts")
 
-BATCH_PREDICT_DIR      = os.path.join(dir_annot, "batch-predict")
-BATCH_PREDICT_GBK      = os.path.join(dir_annot, "batch-predict-input", "all_samples.gbk")
-BATCH_PREDICT_SENTINEL = os.path.join(BATCH_PREDICT_DIR, ".done")
+BATCH_PREDICT_DIR        = os.path.join(dir_annot, "batch-predict")
+BATCH_PREDICT_GBK        = os.path.join(dir_annot, "batch-predict-input", "all_samples.gbk")
+BATCH_NEW_PROTEINS_GBK   = os.path.join(dir_annot, "batch-predict-input", "new_proteins.gbk")
+BATCH_CACHE_HITS_JSON    = os.path.join(dir_annot, "batch-predict-input", "cache_hits.json")
+BATCH_PREDICT_SENTINEL   = os.path.join(BATCH_PREDICT_DIR, ".done")
+
+EMBED_CACHE_DIR = os.path.join(dir_out, "embed_cache")
+CACHE_3DI       = os.path.join(EMBED_CACHE_DIR, "protein_3di.fasta")
+CACHE_AA        = os.path.join(EMBED_CACHE_DIR, "protein_aa.fasta")
 
 
 """

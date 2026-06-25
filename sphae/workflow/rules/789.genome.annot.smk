@@ -74,25 +74,57 @@ rule checkv_run_genome:
         """
 
 
-rule phold_predict_batch:
+rule prepare_and_filter_batch:
     """
-    Run ProstT5 embeddings for ALL samples in ONE GPU pass.
-    Model loads once; proteins from all phages are embedded together.
-    phold compare (per-sample) reuses the shared predictions_dir.
+    Merge per-sample GBKs then filter against embedding cache.
+    Outputs only proteins not yet in cache → phold predict runs on new proteins only.
     """
     input:
         gbks=expand(
             os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
             sample=samples_names
         ),
-    params:
+    output:
         merged=BATCH_PREDICT_GBK,
+        new_proteins=BATCH_NEW_PROTEINS_GBK,
+        cache_hits=BATCH_CACHE_HITS_JSON,
+    params:
+        merge_script=os.path.join(dir_script, "merge_gbk_for_batch.py"),
+        filter_script=os.path.join(dir_script, "filter_for_predict.py"),
+        cache_3di=CACHE_3DI,
+    conda:
+        os.path.join(dir_env, "pharokka.yaml")
+    threads: 1
+    resources:
+        mem_mb=config['resources']['smalljob']['mem_mb'],
+        runtime=60,
+    log:
+        os.path.join(dir_log, "prepare_batch.log")
+    shell:
+        """
+        mkdir -p $(dirname {output.merged}) $(dirname {params.cache_3di})
+        python {params.merge_script} {output.merged} {input.gbks}
+        python {params.filter_script} {output.merged} {params.cache_3di} {output.new_proteins} {output.cache_hits} >> {log} 2>&1
+        """
+
+
+rule phold_predict_batch:
+    """
+    Run ProstT5 embeddings for new proteins only (cache-filtered) in ONE GPU pass.
+    Model loads once; after predict, new embeddings are appended to the cache.
+    """
+    input:
+        new_proteins=BATCH_NEW_PROTEINS_GBK,
+        cache_hits=BATCH_CACHE_HITS_JSON,
+    params:
         outdir=BATCH_PREDICT_DIR,
         prefix="batch",
         db=config['args']['phold_db'],
         cpu=PHOLD_CPU_FLAG,
         batch_size=config['params'].get('phold_batch_size', 32),
-        script=os.path.join(dir_script, "merge_gbk_for_batch.py"),
+        update_script=os.path.join(dir_script, "update_predict_cache.py"),
+        cache_3di=CACHE_3DI,
+        cache_aa=CACHE_AA,
     output:
         sentinel=BATCH_PREDICT_SENTINEL,
     conda:
@@ -107,12 +139,11 @@ rule phold_predict_batch:
         os.path.join(dir_log, "phold_predict_batch.log")
     shell:
         """
-        mkdir -p $(dirname {params.merged})
-        python {params.script} {params.merged} {input.gbks}
-        if [[ -s {params.merged} ]] ; then
+        mkdir -p {params.outdir} $(dirname {params.cache_3di})
+        if [[ -s {input.new_proteins} ]] ; then
             TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
             phold predict \
-                -i {params.merged} \
+                -i {input.new_proteins} \
                 -o {params.outdir} \
                 -p {params.prefix} \
                 -t {threads} \
@@ -121,16 +152,25 @@ rule phold_predict_batch:
                 -f \
                 --batch_size {params.batch_size} \
                 2> {log}
+            python {params.update_script} \
+                {params.outdir}/batch_3di.fasta \
+                {input.new_proteins} \
+                {params.cache_3di} \
+                {params.cache_aa} \
+                2>> {log}
+        else
+            echo "[predict] All proteins in cache — skipping ProstT5" >> {log}
         fi
         touch {output.sentinel}
         """
 
 
 rule phold_split_predictions:
-    """Split batch 3Di/AA fastas into per-sample files that phold compare expects."""
+    """Split batch 3Di/AA fastas into per-sample files, merging with embedding cache."""
     input:
         sentinel=BATCH_PREDICT_SENTINEL,
         gbk=os.path.join(dir_annot, "{sample}-prodigal", "{sample}.gbk"),
+        cache_hits=BATCH_CACHE_HITS_JSON,
     output:
         fasta_3di=os.path.join(BATCH_PREDICT_DIR, "{sample}_3di.fasta"),
         fasta_aa=os.path.join(BATCH_PREDICT_DIR, "{sample}_aa.fasta"),
@@ -138,6 +178,7 @@ rule phold_split_predictions:
     params:
         script=os.path.join(dir_script, "split_batch_predictions.py"),
         predict_dir=BATCH_PREDICT_DIR,
+        cache_3di=CACHE_3DI,
     conda:
         os.path.join(dir_env, "pharokka.yaml")
     threads: 1
@@ -148,7 +189,13 @@ rule phold_split_predictions:
         os.path.join(dir_log, "phold_split.{sample}.log")
     shell:
         """
-        python {params.script} {wildcards.sample} {input.gbk} {params.predict_dir} 2> {log}
+        python {params.script} \
+            {wildcards.sample} \
+            {input.gbk} \
+            {params.predict_dir} \
+            {params.cache_3di} \
+            {input.cache_hits} \
+            2> {log}
         """
 
 
