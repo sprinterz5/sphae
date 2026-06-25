@@ -29,7 +29,7 @@ for record in records_in:
         record.seq,
         id=record.id,
         name=record.id[:16],
-        description=record.description,
+        description=record.description.replace(":", " "),
         annotations={"molecule_type": "DNA"},
     )
 
