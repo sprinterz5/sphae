@@ -167,7 +167,12 @@ def install(output, temp_dir, db_dir, configfile, **kwargs):
 @common_options
 @click.option('--genome', 'genome', help='Input genome assembled or downloaded', type=click.Path(), required=False)
 @click.option('--proteins', 'proteins',help='Input predicted proteins (FAA file)',type=click.Path(),required=False)
-def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, **kwargs):
+@click.option('--library_dir', 'library_dir',
+              help='Persistent cache/library directory (protein embedding cache, genome k-mer sketches). '
+                   'Shared across --output runs so repeated proteins/genomes are not recomputed. '
+                   'Default: ~/.sphae/library',
+              type=click.Path(), required=False)
+def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, library_dir, **kwargs):
     if (genome is None and proteins is None) or (genome and proteins):
         raise click.UsageError(
             "Provide exactly one of --genome or --proteins (not both, not neither)."
@@ -184,7 +189,8 @@ def annotate(genome, proteins, output, db_dir, temp_dir, configfile, use_gpu, **
             "proteins": proteins,
             "temp_dir": temp_dir,
             "configfile": configfile,
-            "use_gpu": use_gpu
+            "use_gpu": use_gpu,
+            "library_dir": library_dir or os.path.join(os.path.expanduser("~"), ".sphae", "library"),
         }
     }
 

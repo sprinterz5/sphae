@@ -239,6 +239,12 @@ def main():
     if no_diversity:
         args.remove("--no-diversity")
 
+    library_dir = None
+    if "--library-dir" in args:
+        i = args.index("--library-dir")
+        library_dir = args[i + 1]
+        del args[i:i + 2]
+
     samples = args
     if not samples:
         samples = sorted(
@@ -249,7 +255,8 @@ def main():
     diversity_data = None
     if not no_diversity:
         import diversity_score
-        diversity_data = diversity_score.score_batch(final_annotate_dir)
+        kwargs = {"library_dir": library_dir} if library_dir else {}
+        diversity_data = diversity_score.score_batch(final_annotate_dir, **kwargs)
 
     results = []
     for sample in samples:

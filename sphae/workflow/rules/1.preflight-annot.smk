@@ -106,9 +106,16 @@ BATCH_NEW_PROTEINS_GBK   = os.path.join(dir_annot, "batch-predict-input", "new_p
 BATCH_CACHE_HITS_JSON    = os.path.join(dir_annot, "batch-predict-input", "cache_hits.json")
 BATCH_PREDICT_SENTINEL   = os.path.join(BATCH_PREDICT_DIR, ".done")
 
-EMBED_CACHE_DIR = os.path.join(dir_out, "embed_cache")
-CACHE_3DI       = os.path.join(EMBED_CACHE_DIR, "protein_3di.fasta")
-CACHE_AA        = os.path.join(EMBED_CACHE_DIR, "protein_aa.fasta")
+"""
+PERSISTENT LIBRARY (shared across --output runs, unlike dir_out)
+Protein embedding cache and genome k-mer sketches live here so repeated
+proteins/genomes across separately-organised batches are not recomputed.
+"""
+LIBRARY_DIR      = config['args'].get('library_dir') or os.path.join(os.path.expanduser("~"), ".sphae", "library")
+EMBED_CACHE_DIR  = os.path.join(LIBRARY_DIR, "embed_cache")
+CACHE_3DI        = os.path.join(EMBED_CACHE_DIR, "protein_3di.fasta")
+CACHE_AA         = os.path.join(EMBED_CACHE_DIR, "protein_aa.fasta")
+GENOME_KMER_DIR  = os.path.join(LIBRARY_DIR, "genome_kmers")
 
 
 """
