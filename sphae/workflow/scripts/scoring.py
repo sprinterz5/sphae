@@ -161,7 +161,7 @@ def annotation_confidence_score(d, core_proteins):
     return max(0.0, min(1.0, score)), reasons
 
 
-def score_sample(sample_dir, sample_name, host_metadata=None):
+def score_sample(sample_dir, sample_name, host_metadata=None, diversity_data=None):
     summary_txt = os.path.join(sample_dir, f"{sample_name}_summary.txt")
     functions_f = os.path.join(sample_dir, f"{sample_name}_summary.functions")
 
@@ -180,15 +180,26 @@ def score_sample(sample_dir, sample_name, host_metadata=None):
     host_score = host_entry["host_evidence_score"] if host_entry else None
     host_reason = host_entry["host_evidence_reason"] if host_entry else "no host_metadata.json entry for this sample"
 
+    div_entry = (diversity_data or {}).get(sample_name)
+    div_score = div_entry["diversity_score"] if div_entry else None
+    if not div_entry:
+        div_reason = "no diversity.json entry for this sample"
+    elif div_entry.get("sole_sample_in_batch"):
+        div_reason = "sole sample in batch — nothing to be redundant with"
+    else:
+        div_reason = f"closest match: {div_entry['most_similar_to']} (similarity {div_entry['similarity_to_most_similar']})"
+
     weights = {
         "genomic_safety": 0.50, "genome_quality": 0.15,
         "annotation_confidence": 0.10, "host_evidence": 0.10,
+        "cocktail_diversity": 0.10,
     }
     components = {
         "genomic_safety": safety,
         "genome_quality": quality,
         "annotation_confidence": annot,
         "host_evidence": host_score,
+        "cocktail_diversity": div_score,
     }
     weight_used = sum(w for k, w in weights.items() if components[k] is not None)
     weighted_sum = sum(weights[k] * components[k] for k in weights if components[k] is not None)
@@ -201,7 +212,7 @@ def score_sample(sample_dir, sample_name, host_metadata=None):
         "genome_quality_score": {"value": quality, "reasons": quality_reasons},
         "annotation_confidence_score": {"value": annot, "reasons": annot_reasons},
         "host_evidence_score": {"value": host_score, "reason": host_reason},
-        "cocktail_diversity_score": None,
+        "cocktail_diversity_score": {"value": div_score, "reason": div_reason},
         "clinical_literature_score": None,
         "core_proteins_detected": core_proteins,
         "raw_fields": d,
@@ -209,7 +220,7 @@ def score_sample(sample_dir, sample_name, host_metadata=None):
         "weight_used": weight_used,
         "weight_total": 0.50 + 0.15 + 0.10 + 0.10 + 0.10 + 0.05,
         "note": "partial_score uses only available components (weight_used/weight_total shown); "
-                "cocktail_diversity and clinical_literature not yet computed",
+                "clinical_literature not yet computed (needs a curated literature DB)",
     }
 
 
@@ -224,6 +235,10 @@ def main():
             host_metadata = json.load(fh)
         del args[i:i + 2]
 
+    no_diversity = "--no-diversity" in args
+    if no_diversity:
+        args.remove("--no-diversity")
+
     samples = args
     if not samples:
         samples = sorted(
@@ -231,16 +246,21 @@ def main():
             if os.path.isdir(os.path.join(final_annotate_dir, d))
         )
 
+    diversity_data = None
+    if not no_diversity:
+        import diversity_score
+        diversity_data = diversity_score.score_batch(final_annotate_dir)
+
     results = []
     for sample in samples:
         sample_dir = os.path.join(final_annotate_dir, sample)
-        result = score_sample(sample_dir, sample, host_metadata=host_metadata)
+        result = score_sample(sample_dir, sample, host_metadata=host_metadata, diversity_data=diversity_data)
         results.append(result)
         out_json = os.path.join(sample_dir, f"{sample}_score.json")
         with open(out_json, "w") as fh:
             json.dump(result, fh, indent=2)
 
-    print(f"{'sample':<15} {'gate':>5} {'safety':>7} {'quality':>8} {'annot':>6} {'host':>6} {'partial':>8} {'weight_used':>12}")
+    print(f"{'sample':<15} {'gate':>5} {'safety':>7} {'quality':>8} {'annot':>6} {'host':>6} {'div':>6} {'partial':>8} {'weight_used':>12}")
     for r in results:
         if "error" in r:
             print(f"{r['sample']:<15} ERROR: {r['error']}")
@@ -249,6 +269,8 @@ def main():
         q_str = f"{q:.2f}" if q is not None else "N/A"
         h = r["host_evidence_score"]["value"]
         h_str = f"{h:.2f}" if h is not None else "N/A"
+        v = r["cocktail_diversity_score"]["value"]
+        v_str = f"{v:.2f}" if v is not None else "N/A"
         print(
             f"{r['sample']:<15} "
             f"{r['safety_gate']['value']:>5.2f} "
@@ -256,6 +278,7 @@ def main():
             f"{q_str:>8} "
             f"{r['annotation_confidence_score']['value']:>6.2f} "
             f"{h_str:>6} "
+            f"{v_str:>6} "
             f"{r['partial_score']:>8.4f} "
             f"{r['weight_used']:>10.2f}/{r['weight_total']:.2f}"
         )
