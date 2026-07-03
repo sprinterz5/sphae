@@ -47,7 +47,7 @@ rule prodigal_annotate_genome:
 
 
 rule checkv_run_genome:
-    """CheckV genome quality assessment; falls back to empty TSV if not installed"""
+    """CheckV genome quality assessment"""
     input:
         fasta=resolve_input,
     output:
@@ -55,6 +55,8 @@ rule checkv_run_genome:
     params:
         outdir=os.path.join(dir_annot, "{sample}-checkv"),
         db=config['args']['checkv_db'],
+    conda:
+        os.path.join(dir_env, "checkv.yaml")
     threads:
         config['resources']['smalljob']['threads']
     resources:
@@ -64,13 +66,9 @@ rule checkv_run_genome:
         os.path.join(dir_log, "checkv.{sample}.log")
     shell:
         """
+        export CHECKVDB={params.db}
         mkdir -p {params.outdir}
-        if command -v checkv &> /dev/null; then
-            checkv end_to_end {input.fasta} {params.outdir} -t {threads} -d {params.db} 2> {log}
-        else
-            echo "checkv not found, writing empty quality summary" > {log}
-            printf "contig_id\tcheckv_quality\tcompleteness\tcontamination\n" > {output.quality}
-        fi
+        checkv end_to_end {input.fasta} {params.outdir} -t {threads} 2> {log}
         """
 
 
