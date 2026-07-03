@@ -12,6 +12,11 @@ Writes, per accession, into outdir:
 Writes once, for the whole batch:
   host_metadata.json        — {accession: {organism, host, lab_host, strain, host_evidence_tier}}
 
+Also merges every downloaded record's host metadata into a persistent,
+cross-run index at {library_dir}/host_index.json (default
+~/.sphae/library) so host_match.py can search everything ever
+downloaded, not just one --outdir. Pass --no-library to skip this.
+
 NCBI eutils rate limit without an API key is 3 req/sec; requests are
 batched (comma-joined ids) and throttled accordingly.
 """
@@ -27,6 +32,7 @@ import urllib.parse
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 BATCH_SIZE = 20
 REQUEST_DELAY = 0.4  # ~2.5 req/sec, safely under the 3 req/sec no-key limit
+DEFAULT_LIBRARY_DIR = os.path.join(os.path.expanduser("~"), ".sphae", "library")
 
 
 def eutils_get(endpoint, params):
@@ -90,7 +96,21 @@ def host_evidence_tier(fields):
     return 0.10, "no host information found"
 
 
-def download(accessions=None, query=None, max_results=20, outdir="genomes"):
+def merge_into_library(library_dir, batch_metadata, outdir):
+    index_path = os.path.join(library_dir, "host_index.json")
+    os.makedirs(library_dir, exist_ok=True)
+    index = {}
+    if os.path.exists(index_path) and os.path.getsize(index_path) > 0:
+        with open(index_path) as fh:
+            index = json.load(fh)
+    for accession, fields in batch_metadata.items():
+        index[accession] = {**fields, "source_dir": outdir}
+    with open(index_path, "w") as fh:
+        json.dump(index, fh, indent=2)
+    return index_path
+
+
+def download(accessions=None, query=None, max_results=20, outdir="genomes", library_dir=DEFAULT_LIBRARY_DIR):
     os.makedirs(outdir, exist_ok=True)
 
     if query and not accessions:
@@ -138,6 +158,10 @@ def download(accessions=None, query=None, max_results=20, outdir="genomes"):
         json.dump(metadata, fh, indent=2)
     print(f"[ncbi_downloader] {len(metadata)} genomes -> {outdir}")
 
+    if library_dir:
+        index_path = merge_into_library(library_dir, metadata, outdir)
+        print(f"[ncbi_downloader] merged into library index -> {index_path}")
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -145,10 +169,16 @@ def main():
     ap.add_argument("--accessions", help="comma-separated accession list")
     ap.add_argument("--max", type=int, default=20, help="max results for --query")
     ap.add_argument("--outdir", default="genomes")
+    ap.add_argument("--library-dir", default=DEFAULT_LIBRARY_DIR,
+                     help="persistent cross-run host index (default: ~/.sphae/library)")
+    ap.add_argument("--no-library", action="store_true",
+                     help="only write this batch's host_metadata.json, skip the persistent index")
     args = ap.parse_args()
 
     accessions = args.accessions.split(",") if args.accessions else None
-    download(accessions=accessions, query=args.query, max_results=args.max, outdir=args.outdir)
+    library_dir = None if args.no_library else args.library_dir
+    download(accessions=accessions, query=args.query, max_results=args.max,
+              outdir=args.outdir, library_dir=library_dir)
 
 
 if __name__ == "__main__":

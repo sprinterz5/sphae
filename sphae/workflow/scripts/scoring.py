@@ -1,27 +1,37 @@
 """
-Phage prioritisation scoring — parses sphae final-annotate outputs
-(summary.txt + summary.functions) and computes Safety Gate, Genomic
-Safety Score, Annotation Confidence, and Genome Quality (if checkv ran).
+Phage Quality Score — parses sphae final-annotate outputs (summary.txt +
+summary.functions) and computes a stable, intrinsic per-phage score.
 
-Formula (weights per component, out of components currently available):
-  Safety Gate x (0.50 Genomic Safety + 0.15 Genome Quality
-                 + 0.10 Annotation Confidence
-                 + 0.10 Host Evidence + 0.10 Cocktail Diversity
-                 + 0.05 Clinical/Literature)
+This is deliberately narrower than Ansar's original single formula.
+Host Evidence and Cocktail Diversity are NOT blended in here, because
+they are not intrinsic properties of a phage:
+  - Host Evidence answers "does this phage match a QUERY bacterium" —
+    that's a search/filter operation (see host_match.py), not a fixed
+    per-phage number.
+  - Cocktail Diversity answers "does this phage add anything given
+    what's ALREADY in a specific cocktail" — it changes with every
+    selection click, so baking it into a single displayed score would
+    make that score visibly flicker as a user builds a cocktail. It's
+    only computed inside a cocktail-building workflow (diversity_score.py),
+    not here.
+  - Clinical/Literature Evidence stays an unautomated manual field.
 
-Host Evidence, Cocktail Diversity, Clinical/Literature are not computed
-here (need NCBI metadata / multi-phage batch / literature DB) and are
-reported as null. total_partial is the gate-weighted sum of components
-that ARE available, with weight_used shown so it's not mistaken for a
-final score.
+Phage Quality Score = Safety Gate x (Genomic Safety + Genome Quality
++ Annotation Confidence), weights renormalized over whichever of these
+three are actually available (genome_quality is null if checkv didn't
+run) so the score always sits in a consistent 0-1 range regardless of
+missing inputs. quality_data_completeness reports how much of the
+intended weight was actually available, separately from the score
+itself, so a low-completeness score isn't silently confused with a
+low-quality one.
 
 Args: final_annotate_dir [sample ...]  (default: all subdirs)
+      [--host-metadata <path>]  attach host_evidence_score as an informational field (not scored in)
 """
 import sys
 import os
 import re
 import json
-import glob
 
 CORE_PROTEIN_KEYWORDS = {
     "terminase":   ["terminase"],
@@ -30,6 +40,8 @@ CORE_PROTEIN_KEYWORDS = {
     "tail":        ["tail"],
     "lysis":       ["holin", "lysin", "endolysin", "spanin"],
 }
+
+QUALITY_WEIGHTS = {"genomic_safety": 0.50, "genome_quality": 0.15, "annotation_confidence": 0.10}
 
 
 def parse_summary_txt(path):
@@ -161,7 +173,7 @@ def annotation_confidence_score(d, core_proteins):
     return max(0.0, min(1.0, score)), reasons
 
 
-def score_sample(sample_dir, sample_name, host_metadata=None, diversity_data=None):
+def score_sample(sample_dir, sample_name, host_metadata=None):
     summary_txt = os.path.join(sample_dir, f"{sample_name}_summary.txt")
     functions_f = os.path.join(sample_dir, f"{sample_name}_summary.functions")
 
@@ -176,51 +188,36 @@ def score_sample(sample_dir, sample_name, host_metadata=None, diversity_data=Non
     quality, quality_reasons = genome_quality_score(d)
     annot, annot_reasons = annotation_confidence_score(d, core_proteins)
 
+    # Phage Quality Score: stable, intrinsic to this genome alone. Renormalized
+    # over whichever of the three components are available so the score is
+    # always a proper 0-1 value, with completeness reported separately.
+    components = {"genomic_safety": safety, "genome_quality": quality, "annotation_confidence": annot}
+    available_weight = sum(w for k, w in QUALITY_WEIGHTS.items() if components[k] is not None)
+    weighted_sum = sum(QUALITY_WEIGHTS[k] * components[k] for k in QUALITY_WEIGHTS if components[k] is not None)
+    quality_score = gate * (weighted_sum / available_weight) if available_weight > 0 else 0.0
+    quality_data_completeness = round(available_weight / sum(QUALITY_WEIGHTS.values()), 4)
+
+    # Host Evidence: informational only, not folded into quality_score — see
+    # host_match.py for the actual "find candidates for bacterium X" search.
     host_entry = (host_metadata or {}).get(sample_name)
     host_score = host_entry["host_evidence_score"] if host_entry else None
     host_reason = host_entry["host_evidence_reason"] if host_entry else "no host_metadata.json entry for this sample"
 
-    div_entry = (diversity_data or {}).get(sample_name)
-    div_score = div_entry["diversity_score"] if div_entry else None
-    if not div_entry:
-        div_reason = "no diversity.json entry for this sample"
-    elif div_entry.get("sole_sample_in_batch"):
-        div_reason = "sole sample in batch — nothing to be redundant with"
-    else:
-        div_reason = f"closest match: {div_entry['most_similar_to']} (similarity {div_entry['similarity_to_most_similar']})"
-
-    weights = {
-        "genomic_safety": 0.50, "genome_quality": 0.15,
-        "annotation_confidence": 0.10, "host_evidence": 0.10,
-        "cocktail_diversity": 0.10,
-    }
-    components = {
-        "genomic_safety": safety,
-        "genome_quality": quality,
-        "annotation_confidence": annot,
-        "host_evidence": host_score,
-        "cocktail_diversity": div_score,
-    }
-    weight_used = sum(w for k, w in weights.items() if components[k] is not None)
-    weighted_sum = sum(weights[k] * components[k] for k in weights if components[k] is not None)
-    partial_score = gate * weighted_sum if weight_used > 0 else 0.0
-
     return {
         "sample": sample_name,
+        "phage_quality_score": round(quality_score, 4),
+        "quality_data_completeness": quality_data_completeness,
         "safety_gate": {"value": gate, "reason": gate_reason},
         "genomic_safety_score": {"value": safety, "reasons": safety_reasons},
         "genome_quality_score": {"value": quality, "reasons": quality_reasons},
         "annotation_confidence_score": {"value": annot, "reasons": annot_reasons},
         "host_evidence_score": {"value": host_score, "reason": host_reason},
-        "cocktail_diversity_score": {"value": div_score, "reason": div_reason},
-        "clinical_literature_score": None,
         "core_proteins_detected": core_proteins,
         "raw_fields": d,
-        "partial_score": round(partial_score, 4),
-        "weight_used": weight_used,
-        "weight_total": 0.50 + 0.15 + 0.10 + 0.10 + 0.10 + 0.05,
-        "note": "partial_score uses only available components (weight_used/weight_total shown); "
-                "clinical_literature not yet computed (needs a curated literature DB)",
+        "note": "phage_quality_score is intrinsic to this genome only. Host matching is a "
+                "separate query (host_match.py) and cocktail diversity is only meaningful "
+                "inside an actual cocktail-building session (diversity_score.py) — neither "
+                "is blended in here, since both are relative rather than per-genome facts.",
     }
 
 
@@ -235,16 +232,6 @@ def main():
             host_metadata = json.load(fh)
         del args[i:i + 2]
 
-    no_diversity = "--no-diversity" in args
-    if no_diversity:
-        args.remove("--no-diversity")
-
-    library_dir = None
-    if "--library-dir" in args:
-        i = args.index("--library-dir")
-        library_dir = args[i + 1]
-        del args[i:i + 2]
-
     samples = args
     if not samples:
         samples = sorted(
@@ -252,22 +239,16 @@ def main():
             if os.path.isdir(os.path.join(final_annotate_dir, d))
         )
 
-    diversity_data = None
-    if not no_diversity:
-        import diversity_score
-        kwargs = {"library_dir": library_dir} if library_dir else {}
-        diversity_data = diversity_score.score_batch(final_annotate_dir, **kwargs)
-
     results = []
     for sample in samples:
         sample_dir = os.path.join(final_annotate_dir, sample)
-        result = score_sample(sample_dir, sample, host_metadata=host_metadata, diversity_data=diversity_data)
+        result = score_sample(sample_dir, sample, host_metadata=host_metadata)
         results.append(result)
         out_json = os.path.join(sample_dir, f"{sample}_score.json")
         with open(out_json, "w") as fh:
             json.dump(result, fh, indent=2)
 
-    print(f"{'sample':<15} {'gate':>5} {'safety':>7} {'quality':>8} {'annot':>6} {'host':>6} {'div':>6} {'partial':>8} {'weight_used':>12}")
+    print(f"{'sample':<15} {'gate':>5} {'safety':>7} {'quality':>8} {'annot':>6} {'host':>6} {'phage_quality':>13} {'completeness':>12}")
     for r in results:
         if "error" in r:
             print(f"{r['sample']:<15} ERROR: {r['error']}")
@@ -276,8 +257,6 @@ def main():
         q_str = f"{q:.2f}" if q is not None else "N/A"
         h = r["host_evidence_score"]["value"]
         h_str = f"{h:.2f}" if h is not None else "N/A"
-        v = r["cocktail_diversity_score"]["value"]
-        v_str = f"{v:.2f}" if v is not None else "N/A"
         print(
             f"{r['sample']:<15} "
             f"{r['safety_gate']['value']:>5.2f} "
@@ -285,9 +264,8 @@ def main():
             f"{q_str:>8} "
             f"{r['annotation_confidence_score']['value']:>6.2f} "
             f"{h_str:>6} "
-            f"{v_str:>6} "
-            f"{r['partial_score']:>8.4f} "
-            f"{r['weight_used']:>10.2f}/{r['weight_total']:.2f}"
+            f"{r['phage_quality_score']:>13.4f} "
+            f"{r['quality_data_completeness']:>12.2f}"
         )
 
 
